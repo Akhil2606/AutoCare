@@ -1,0 +1,45 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoCare | Account</title>
+    <link rel="stylesheet" href="/static/auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>AutoCare</h1>
+            <p class="subtitle">Your vehicle care partner</p>
+
+            <div class="tabs">
+                <button id="signinTab" class="active" onclick="showForm('signin')">Sign In</button>
+                <button id="signupTab" onclick="showForm('signup')">Sign Up</button>
+            </div>
+
+            <form id="signinForm">
+                <h2>Welcome Back!</h2>
+                <input type="email" id="loginEmail" placeholder="Email address" required>
+                <input type="password" id="loginPassword" placeholder="Password" required>
+                <button type="submit" class="submit-btn">Sign In</button>
+            </form>
+
+            <form id="signupForm" class="hidden">
+                <h2>Create Account</h2>
+                <input type="text" id="name" placeholder="Full Name" required>
+                <input type="email" id="email" placeholder="Email address" required>
+                <input type="tel" id="phone" placeholder="Phone Number">
+                <input type="password" id="password" placeholder="Password (minimum 8 characters)" minlength="8" required>
+                <input type="password" id="confirmPassword" placeholder="Confirm Password" minlength="8" required>
+                <button type="submit" class="submit-btn">Create Account</button>
+            </form>
+
+            <p id="message"></p>
+            <button id="logoutBtn" class="hidden">Logout</button>
+        </div>
+    </div>
+
+    <script src="/static/auth.js"></script>
+</body>
+</html>
