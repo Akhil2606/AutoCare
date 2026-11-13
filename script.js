@@ -1,3 +1,4 @@
+
 (() => {
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -21,6 +22,35 @@
 
   addEventListener('scroll', updateProgress, { passive: true });
   updateProgress();
+
+  // Back to Top functionality
+  const backToTopButton = $('.to-top');
+
+  function updateBackToTopButton() {
+    backToTopButton.classList.toggle('show', window.scrollY > 350);
+  }
+
+  addEventListener('scroll', updateBackToTopButton, { passive: true });
+  updateBackToTopButton();
+
+  backToTopButton.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  $('.footer-bottom a').addEventListener('click', event => {
+    event.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // Navigation active button highlighting
+  const desktopNavLinks = $$('.desktop-nav a');
+
+  desktopNavLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      desktopNavLinks.forEach(item => item.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
 
   const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
     if (entry.isIntersecting) {
@@ -76,44 +106,125 @@
     toggleCart(false);
   });
 
+  // Update quantity controls on product cards
+  function renderProductControls() {
+    $$('.product-card').forEach(card => {
+      const name = card.querySelector('h3').textContent.trim();
+      const priceText = card.querySelector('.product-bottom strong').textContent.trim();
+      const price = Number(priceText.replace(/[^0-9]/g, ''));
+      const item = cartItems.find(product => product.name === name);
+      const quantity = item ? item.qty : 0;
+      const bottom = card.querySelector('.product-bottom');
+
+      if (quantity === 0) {
+        bottom.innerHTML = `
+          <strong>${priceText}</strong>
+          <button class="add-cart" data-product="${name}" data-price="${price}">
+            Add to cart <span>↗</span>
+          </button>
+        `;
+      } else {
+        bottom.innerHTML = `
+          <strong>${priceText}</strong>
+          <div class="quantity-control">
+            <button type="button" data-cart-action="decrease" data-product="${name}" aria-label="Decrease ${name} quantity">−</button>
+            <span>${quantity}</span>
+            <button type="button" data-cart-action="increase" data-product="${name}" data-price="${price}" aria-label="Increase ${name} quantity">+</button>
+          </div>
+        `;
+      }
+    });
+  }
+
+  // Render cart drawer
   function renderCart() {
     const count = cartItems.reduce((sum, item) => sum + item.qty, 0);
+
     $$('.cart-count').forEach(el => el.textContent = count);
     $('.cart-count-inline').textContent = `(${count})`;
-    $('.cart-total').textContent = '₹' + cartItems.reduce((sum, item) => sum + item.price * item.qty, 0).toLocaleString('en-IN');
+
+    const total = cartItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+    $('.cart-total').textContent = '₹' + total.toLocaleString('en-IN');
 
     const box = $('.cart-items');
 
     if (!cartItems.length) {
       box.innerHTML = '<p class="empty-cart">Your cart is taking a pit stop.<br><small>Add a part and it’ll show up here.</small></p>';
-      return;
+    } else {
+      box.innerHTML = cartItems.map(item => `
+        <div class="cart-row">
+          <div class="cart-item-info">
+            <b>${item.name}</b>
+            <small>₹${item.price.toLocaleString('en-IN')} each</small>
+          </div>
+          <strong>₹${(item.price * item.qty).toLocaleString('en-IN')}</strong>
+          <div class="quantity-control cart-quantity">
+            <button type="button" data-cart-action="decrease" data-product="${item.name}" aria-label="Decrease ${item.name} quantity">−</button>
+            <span>${item.qty}</span>
+            <button type="button" data-cart-action="increase" data-product="${item.name}" data-price="${item.price}" aria-label="Increase ${item.name} quantity">+</button>
+          </div>
+        </div>
+      `).join('');
     }
 
-    box.innerHTML = cartItems.map(item => `
-      <div class="cart-row">
-        <div>
-          <b>${item.name}</b>
-          <small>Qty ${item.qty} · ₹${item.price.toLocaleString('en-IN')} each</small>
-        </div>
-        <strong>₹${(item.price * item.qty).toLocaleString('en-IN')}</strong>
-        <button data-remove="${item.name}">Remove item</button>
-      </div>
-    `).join('');
-
-    $$('[data-remove]', box).forEach(btn => btn.addEventListener('click', () => {
-      cartItems = cartItems.filter(item => item.name !== btn.dataset.remove);
-      renderCart();
-    }));
+    renderProductControls();
   }
 
+  // Add product to cart
   function addProduct(name, price) {
     const existing = cartItems.find(item => item.name === name);
-    existing ? existing.qty++ : cartItems.push({ name, price: Number(price), qty: 1 });
+
+    if (existing) {
+      existing.qty++;
+    } else {
+      cartItems.push({ name, price: Number(price), qty: 1 });
+    }
+
     renderCart();
     notify(`${name} added to your cart`);
   }
 
-  $$('[data-product]').forEach(btn => btn.addEventListener('click', () => addProduct(btn.dataset.product, btn.dataset.price)));
+  // Handle Add, Increase and Decrease actions
+  document.addEventListener('click', event => {
+    const quantityButton = event.target.closest('[data-cart-action]');
+
+    if (quantityButton) {
+      const name = quantityButton.dataset.product;
+      const action = quantityButton.dataset.cartAction;
+      const item = cartItems.find(product => product.name === name);
+
+      if (action === 'increase') {
+        if (item) {
+          item.qty++;
+        } else {
+          cartItems.push({
+            name,
+            price: Number(quantityButton.dataset.price),
+            qty: 1
+          });
+        }
+      }
+
+      if (action === 'decrease' && item) {
+        item.qty--;
+
+        if (item.qty <= 0) {
+          cartItems = cartItems.filter(product => product.name !== name);
+        }
+      }
+
+      renderCart();
+      return;
+    }
+
+    const productButton = event.target.closest('[data-product]');
+
+    if (productButton) {
+      addProduct(productButton.dataset.product, productButton.dataset.price);
+    }
+  });
+
+  renderCart();
 
   $('.checkout-button').addEventListener('click', () => notify(cartItems.length ? 'Checkout is a demo — no payment was taken.' : 'Your cart is empty'));
 
@@ -141,8 +252,9 @@
   });
 
   // Authentication: FastAPI connection
+  
+  // Authentication: Browser-based demo login and signup
 
-  const API_BASE_URL = 'http://127.0.0.1:8000';
   const backdrop = $('.modal-backdrop');
   let authMode = 'login';
 
@@ -150,16 +262,42 @@
   const logoutButton = $('.logout-button');
   const userGreeting = $('.user-greeting');
 
-  function getSavedToken() {
-    return localStorage.getItem('autocare-token') || sessionStorage.getItem('autocare-token');
+  const ACCOUNTS_KEY = 'autocare-demo-accounts';
+  const SESSION_KEY = 'autocare-demo-user';
+
+  function getAccounts() {
+    try {
+      return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '[]');
+    } catch {
+      return [];
+    }
   }
 
   function getSavedUser() {
-    const saved = localStorage.getItem('autocare-demo-user') || sessionStorage.getItem('autocare-demo-user');
-    if (!saved) return null;
-
     try {
-      return JSON.parse(saved);
+      const savedUsers = [
+        localStorage.getItem(SESSION_KEY),
+        sessionStorage.getItem(SESSION_KEY)
+      ];
+
+      for (const saved of savedUsers) {
+        if (!saved) continue;
+
+        const user = JSON.parse(saved);
+
+        const account = getAccounts().find(
+          account => account.email === user.email
+        );
+
+        if (account) {
+          return {
+            name: account.name,
+            email: account.email
+          };
+        }
+      }
+
+      return null;
     } catch {
       return null;
     }
@@ -168,116 +306,122 @@
   function updateAuthUI(user) {
     const loggedIn = Boolean(user);
 
-    loginButtons.forEach(button => button.hidden = loggedIn);
+    loginButtons.forEach(button => {
+      button.hidden = loggedIn;
+    });
+
     logoutButton.hidden = !loggedIn;
     userGreeting.hidden = !loggedIn;
 
     userGreeting.textContent = loggedIn
-        ? `Hi, ${user.name || user.email || 'User'}`
-        : '';
-}
-
-  function clearSavedAuth() {
-    localStorage.removeItem('autocare-token');
-    sessionStorage.removeItem('autocare-token');
-    localStorage.removeItem('autocare-demo-user');
-    sessionStorage.removeItem('autocare-demo-user');
+      ? `Hi, ${user.name || user.email}`
+      : '';
   }
 
-  async function restoreLoginSession() {
-    const token = getSavedToken();
-    const user = getSavedUser();
+  function saveUserSession(user, remember) {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
 
-    if (!token || !user) {
-      updateAuthUI(null);
-      return;
-    }
+    const storage = remember ? localStorage : sessionStorage;
+    storage.setItem(SESSION_KEY, JSON.stringify(user));
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+    updateAuthUI(user);
+  }
 
-      if (!response.ok) {
-        clearSavedAuth();
-        updateAuthUI(null);
-        return;
-      }
-
-      const profile = await response.json();
-      const updatedUser = {
-        name: profile.name || user.name,
-        email: profile.email || user.email
-      };
-      const storage = localStorage.getItem('autocare-token') ? localStorage : sessionStorage;
-      storage.setItem('autocare-demo-user', JSON.stringify(updatedUser));
-      updateAuthUI(updatedUser);
-    } catch (error) {
-      console.warn('Could not restore login session:', error);
-      updateAuthUI(user);
-    }
+  function clearUserSession() {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+    updateAuthUI(null);
   }
 
   function authOpen(open) {
     backdrop.classList.toggle('open', open);
     body.classList.toggle('locked', open);
-    if (open) setTimeout(() => $('#auth-form input:not([type=checkbox])')?.focus(), 180);
+
+    if (open) {
+      setTimeout(() => {
+        $('#auth-form input:not([type=checkbox])')?.focus();
+      }, 180);
+    }
   }
 
+  // Restore an existing login session
+  updateAuthUI(getSavedUser());
+
+  // Logout
   logoutButton.addEventListener('click', () => {
-    clearSavedAuth();
-    updateAuthUI(null);
+    clearUserSession();
     authOpen(false);
     notify('You have been logged out successfully.');
   });
 
-  restoreLoginSession();
-
+  // Switch between signup and signin
   function setAuthMode(mode) {
     authMode = mode;
     const signup = mode === 'signup';
 
     $('#auth-title').textContent = signup ? 'Create your account.' : 'Sign in.';
-    $('.auth-form > .eyebrow').innerHTML = '<span class="eyebrow-dot"></span> ' + (signup ? 'JOIN THE AUTO CARE CLUB' : 'WELCOME BACK');
-    $('.auth-form > p:not(.eyebrow)').textContent = signup ? 'A better ownership experience starts here.' : 'Enter your details to continue.';
+
+    $('.auth-form > .eyebrow').innerHTML =
+      '<span class="eyebrow-dot"></span> ' +
+      (signup ? 'JOIN THE AUTO CARE CLUB' : 'WELCOME BACK');
+
+    $('.auth-form > p:not(.eyebrow)').textContent = signup
+      ? 'Create your account to get started.'
+      : 'Enter your details to continue.';
+
     $('.auth-name-field').hidden = !signup;
     $('.auth-name-field input').required = signup;
-    $('#auth-form [name="password"]').autocomplete = signup ? 'new-password' : 'current-password';
+
+    $('#auth-form [name="password"]').autocomplete =
+      signup ? 'new-password' : 'current-password';
+
     $('.auth-options').hidden = signup;
-    $('.auth-submit').innerHTML = (signup ? 'Create account' : 'Sign in') + ' <span>↗</span>';
+
+    $('.auth-submit').innerHTML =
+      (signup ? 'Create account' : 'Sign in') + ' <span>↗</span>';
 
     $('.auth-switch').innerHTML = signup
       ? 'Already have an account? <button type="button" class="signup-switch">Sign in</button>'
       : 'New to Auto Care? <button type="button" class="signup-switch">Create account</button>';
   }
 
-  $$('[data-open="login"]').forEach(btn => btn.addEventListener('click', () => {
-    setAuthMode('login');
-    authOpen(true);
-  }));
+  loginButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      setAuthMode('login');
+      authOpen(true);
+    });
+  });
 
   $('.auth-close').addEventListener('click', () => authOpen(false));
 
-  backdrop.addEventListener('click', e => {
-    if (e.target === backdrop) authOpen(false);
+  backdrop.addEventListener('click', event => {
+    if (event.target === backdrop) {
+      authOpen(false);
+    }
   });
 
-  $('.auth-switch').addEventListener('click', e => {
-    if (e.target.closest('.signup-switch')) {
+  $('.auth-switch').addEventListener('click', event => {
+    if (event.target.closest('.signup-switch')) {
       setAuthMode(authMode === 'login' ? 'signup' : 'login');
     }
   });
 
-  $('.forgot-button').addEventListener('click', () => notify('Password recovery is not connected yet.'));
+  $('.forgot-button').addEventListener('click', () => {
+    notify('Password recovery is not available in this demo.');
+  });
 
-  $('#auth-form').addEventListener('submit', async e => {
-    e.preventDefault();
+  // Signup and signin
+  $('#auth-form').addEventListener('submit', event => {
+    event.preventDefault();
 
-    const form = e.currentTarget;
+    const form = event.currentTarget;
     const data = new FormData(form);
-    const email = String(data.get('email') || '').trim();
-    const password = String(data.get('password') || '');
+
     const name = String(data.get('name') || '').trim();
+    const email = String(data.get('email') || '').trim().toLowerCase();
+    const password = String(data.get('password') || '');
+
     const signup = authMode === 'signup';
     const submitButton = $('.auth-submit');
 
@@ -286,77 +430,67 @@
       return;
     }
 
-    submitButton.disabled = true;
-    submitButton.textContent = signup ? 'Creating account...' : 'Signing in...';
+    if (signup) {
+      const accounts = getAccounts();
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/${signup ? 'register' : 'login'}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(signup ? { name, email, password } : { email, password })
-      });
+      const existingAccount = accounts.find(account => account.email === email);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        const detail = result.detail;
-        const message = Array.isArray(detail)
-          ? detail.map(item => item.msg).join(', ')
-          : typeof detail === 'string' ? detail : 'Authentication failed.';
-
-        throw new Error(message);
-      }
-
-      if (signup) {
-        notify('Account created successfully. Please sign in.');
-        form.reset();
-        setAuthMode('login');
+      if (existingAccount) {
+        notify('This email is already registered. Please sign in.');
         return;
       }
 
-      const storage = $('.check-label input').checked ? localStorage : sessionStorage;
-      storage.setItem('autocare-token', result.access_token);
+      accounts.push({
+        name,
+        email,
+        password
+      });
 
-      let displayName = name || email.split('@')[0] || 'Driver';
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 
-      try {
-        const profileResponse = await fetch(`${API_BASE_URL}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${result.access_token}`
-          }
-        });
+      notify('Account created successfully! Please sign in.');
 
-        if (profileResponse.ok) {
-          const profile = await profileResponse.json();
-          displayName = profile.name || displayName;
-        }
-      } catch (profileError) {
-        console.warn('Could not load user profile:', profileError);
-      }
-
-      const loggedInUser = { name: displayName, email };
-      storage.setItem('autocare-demo-user', JSON.stringify(loggedInUser));
-      updateAuthUI(loggedInUser);
-
-      authOpen(false);
-      notify(`Welcome back, ${displayName}!`);
       form.reset();
       setAuthMode('login');
-
-    } catch (error) {
-      notify(error.message || 'Unable to connect to the server.');
-    } finally {
-      submitButton.disabled = false;
-      submitButton.innerHTML = (authMode === 'signup' ? 'Create account' : 'Sign in') + ' <span>↗</span>';
+      return;
     }
+
+    const accounts = getAccounts();
+
+    const account = accounts.find(account =>
+      account.email === email && account.password === password
+    );
+
+    if (!account) {
+      notify('Invalid email or password. Please check your credentials.');
+      return;
+    }
+
+    const loggedInUser = {
+      name: account.name,
+      email: account.email
+    };
+
+    const remember = $('.check-label input').checked;
+
+    saveUserSession(loggedInUser, remember);
+
+    authOpen(false);
+    notify(`Welcome back, ${account.name}!`);
+
+    form.reset();
+    setAuthMode('login');
   });
 
   $$('.service-book').forEach(btn => btn.addEventListener('click', () => {
-    const card = btn.closest('.service-card');
-    $('#booking-form select').value = card.dataset.service;
-    $('#booking').scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => $('#booking-form input[name="name"]').focus({ preventScroll: true }), 700);
-  }));
+  const card = btn.closest('.service-card');
+  $('#booking-form select').value = card.dataset.service;
+  $('#booking').scrollIntoView({ behavior: 'smooth' });
+
+  setTimeout(() => {
+    $('#booking-form input[name="name"]').focus({ preventScroll: true });
+  }, 700);
+}));
 
   $('#booking-date').min = new Date().toISOString().split('T')[0];
 
@@ -367,9 +501,20 @@
     e.currentTarget.reset();
   });
 
+  // Newsletter subscription popup
   $('#newsletter-form').addEventListener('submit', e => {
     e.preventDefault();
+
+    const emailInput = e.currentTarget.querySelector('input[type="email"]');
+    const email = emailInput.value.trim();
+
+    if (!email) {
+      notify('Please enter your email address.');
+      return;
+    }
+
     $('#newsletter-message').textContent = 'You’re on the list — thanks for joining.';
+    notify('Thanks for subscribing! Your email has been added (demo).');
     e.currentTarget.reset();
   });
 
